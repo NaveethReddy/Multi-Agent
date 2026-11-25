@@ -37,7 +37,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-On Windows, create it with `py -m venv .venv`, then activate it in PowerShell with
+On Windows, create it with `python -m venv .venv`, then activate it in PowerShell with
 `.venv\Scripts\Activate.ps1` or in Command Prompt with `.venv\Scripts\activate.bat`. Once activated,
 install the project dependencies:
 
@@ -48,6 +48,29 @@ ollama pull qwen2.5-coder:7b          # or any model that fits your GPU/RAM
 ```
 
 Run `deactivate` to leave the virtual environment.
+
+### VS Code on Windows
+
+Open the repository folder in VS Code and use **Terminal → New Terminal**. For
+a fresh checkout, create the environment and install the dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Select `.venv\Scripts\python.exe` through **Python: Select Interpreter** in the
+command palette. In the PowerShell terminal, verify the installation and run
+the scripted student management demo:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -q
+.\.venv\Scripts\python.exe main.py --demo
+```
+
+Open the `state.json` file and `output` folder at the path printed by the demo.
+For a real-model run, start Ollama first and check the installed model with
+`ollama list`.
 
 ## Run
 
@@ -108,7 +131,7 @@ verify the harness and must be kept separate from live model comparisons.
 ## Tests
 
 ```bash
-python -m pytest -q        # 37 tests, ~30 s, fully offline
+python -m pytest tests -q
 ```
 
 `eval/mock_llm.py` is a **scripted** backend used only to verify plumbing (routing, sandbox, parsers,

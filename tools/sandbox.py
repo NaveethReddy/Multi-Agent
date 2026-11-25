@@ -56,7 +56,7 @@ def write_tree(root: Path, *trees: dict[str, str]) -> None:
             safe_relpath(rel)
             dest = root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(content)
+            dest.write_text(content, encoding="utf-8")
 
 
 _SUMMARY = re.compile(r"(\d+) (passed|failed|error|errors)")
@@ -100,7 +100,14 @@ def run_pytest(files: dict[str, str], tests: dict[str, str], timeout_s: int = 20
         try:
             p = subprocess.run(cmd, cwd=root, env=env, capture_output=True, text=True,
                                timeout=timeout_s, **kwargs)
-            return parse_pytest(p.stdout + p.stderr)
+            output = p.stdout + p.stderr
+            result = parse_pytest(output)
+            if p.returncode != 0:
+                result.all_passed = False
+                if p.returncode != 5 and not (result.failed or result.errors):
+                    result.errors = 1
+                result.traceback = f"pytest exited with exit code {p.returncode}\n{output[-3400:]}"
+            return result
         except subprocess.TimeoutExpired as e:
             out = (e.stdout or b"")
             out = out.decode() if isinstance(out, bytes) else out

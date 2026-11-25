@@ -116,7 +116,8 @@ class LLMClient:
         return LLMResponse(text, tin, tout, dt)
 
     def call_json(self, agent: str, system: str, prompt: str,
-                  required_keys: Optional[list[str]] = None) -> dict:
+                  required_keys: Optional[list[str]] = None,
+                  validate: Optional[Callable[[dict], None]] = None) -> dict:
         """Call and validate JSON, with one automatic repair retry (design doc, section 6)."""
         last_err = None
         for attempt in range(self.cfg.json_repair_retries + 1):
@@ -131,7 +132,9 @@ class LLMClient:
                 missing = [k for k in (required_keys or []) if k not in data]
                 if missing:
                     raise KeyError(f"missing keys {missing}")
+                if validate is not None:
+                    validate(data)
                 return data
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
+            except (ValueError, KeyError, TypeError) as e:
                 last_err = str(e)
         raise ValueError(f"{agent}: invalid JSON after repair retry: {last_err}")

@@ -1,4 +1,5 @@
 import json
+import subprocess
 import pytest
 
 from agents.base import parse_file_blocks, parse_files_or_single
@@ -53,6 +54,24 @@ def test_sandbox_runs_and_detects_failure():
     bad = run_pytest({"m.py": "def f():\n    return 3\n"},
                      {"test_m.py": "from m import f\ndef test_f():\n    assert f() == 2\n"})
     assert not bad.all_passed and "assert" in bad.traceback
+
+
+def test_sandbox_preserves_unicode_source():
+    result = run_pytest(
+        {"m.py": "VALUE = '\U0001f393'\n"},
+        {"test_m.py": "from m import VALUE\ndef test_value():\n    assert VALUE == '\\U0001f393'\n"},
+    )
+    assert result.all_passed
+
+
+def test_sandbox_requires_zero_pytest_exit_code(monkeypatch):
+    def interrupted(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 2, "1 passed in 0.1s\n", "")
+
+    monkeypatch.setattr(subprocess, "run", interrupted)
+    result = run_pytest({}, {})
+    assert not result.all_passed
+    assert "exit code 2" in result.traceback
 
 
 def test_sandbox_timeout_on_infinite_loop():

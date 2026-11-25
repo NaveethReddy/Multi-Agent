@@ -10,6 +10,7 @@ import os
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from agents.coder import CoderAgent
@@ -21,6 +22,7 @@ from agents.tester import TesterAgent
 from config import Config
 from llm import BudgetExceeded, LLMClient
 from state import SharedState
+from tools.sandbox import write_tree
 
 STOP = "stop"
 
@@ -164,12 +166,9 @@ class Supervisor:
         return repeats
 
     def save(self, state: SharedState, run_dir: str) -> None:
-        os.makedirs(os.path.join(run_dir, "output"), exist_ok=True)
-        for rel, content in {**state.files, **state.tests}.items():
-            dest = os.path.join(run_dir, "output", rel)
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            with open(dest, "w") as f:
-                f.write(content)
+        output = Path(run_dir) / "output"
+        output.mkdir(parents=True, exist_ok=True)
+        write_tree(output, state.files, state.tests)
         state.dump(os.path.join(run_dir, "state.json"))
 
 

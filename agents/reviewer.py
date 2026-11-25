@@ -15,6 +15,14 @@ SYSTEM = (
 )
 
 
+def validate_review(data: dict) -> None:
+    if not isinstance(data["approved"], bool):
+        raise ValueError("approved must be a boolean")
+    findings = data["findings"]
+    if not isinstance(findings, list) or any(not isinstance(item, dict) for item in findings):
+        raise ValueError("findings must be a list of objects")
+
+
 class ReviewerAgent(Agent):
     name = "reviewer"
 
@@ -27,9 +35,9 @@ class ReviewerAgent(Agent):
             + "\n\nruff findings:\n" + json.dumps(static["ruff"]["issues"][:20])
             + "\n\nbandit findings:\n" + json.dumps(static["bandit"]["issues"][:20]))
         data = self.llm.call_json(self.name, SYSTEM, prompt,
-                                  required_keys=["approved", "findings"])
+                                  required_keys=["approved", "findings"], validate=validate_review)
         # Hard rules from the design doc: tools, not the LLM's opinion, have the last word.
-        approved = bool(data["approved"])
+        approved = data["approved"]
         reasons = []
         if not tr.all_passed:
             approved = False

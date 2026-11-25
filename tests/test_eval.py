@@ -8,6 +8,7 @@ import pytest
 
 from config import Config
 from eval import mock_llm
+from eval import humaneval_runner
 from eval import run_custom
 from eval.humaneval_runner import check_solution, evaluate, load_problems
 from eval.run_custom import load_tasks, run_task
@@ -98,3 +99,13 @@ def test_custom_report_keeps_going_after_a_model_error(tmp_path, monkeypatch):
     assert data["summary"]["task_success_rate"] == 0.5
     assert data["rows"][0]["error"] == "ConnectionError: model unavailable"
     assert data["rows"][1]["success"]
+
+
+def test_humaneval_report_records_reference_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(humaneval_runner, "run_script", lambda *_: (124, "TIMEOUT"))
+    report = tmp_path / "timeout.json"
+    summary = evaluate(load_problems(MINI)[:1], "canonical", CFG, out_path=str(report))
+    row = json.loads(report.read_text())["rows"][0]
+    assert summary["pass@1"] == 0.0
+    assert summary["error_samples"] == 1
+    assert row["errors"][0]["reason"].startswith("TimeoutError:")

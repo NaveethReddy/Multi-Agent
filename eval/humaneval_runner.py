@@ -42,7 +42,9 @@ def load_problems(path: str) -> list[dict]:
 def check_solution(problem: dict, code: str, timeout_s: int) -> bool:
     """Official-style execution: solution, then the benchmark's check(candidate)."""
     program = f"{code}\n\n{problem['test']}\n\ncheck({problem['entry_point']})\n"
-    rc, _ = run_script(program, timeout_s)
+    rc, output = run_script(program, timeout_s)
+    if rc == 124 and output == "TIMEOUT":
+        raise TimeoutError(f"HumanEval checks exceeded the {timeout_s}-second time limit")
     return rc == 0
 
 

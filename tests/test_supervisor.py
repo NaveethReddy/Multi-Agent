@@ -167,6 +167,18 @@ def test_malformed_json_twice_fails_cleanly():
     assert s.status == "failed" and "invalid JSON" in s.stop_reason
 
 
+def test_review_rejects_string_instead_of_boolean():
+    s, _ = run(scripted(reviewer=['{"approved": "false", "findings": []}']))
+    assert s.status == "failed"
+    assert "approved must be a boolean" in s.stop_reason
+
+
+def test_review_repairs_wrong_boolean_type():
+    s, llm = run(scripted(reviewer=['{"approved": "true", "findings": []}', review_json(True)]))
+    assert s.status == "success"
+    assert sum(m["agent"] == "reviewer" for m in llm.calls) == 2
+
+
 def test_unsafe_path_from_planner_is_rejected():
     s, _ = run(scripted(planner=[plan_json("../evil.py", "x", [])]))
     assert s.status == "failed" and "unsafe path" in s.stop_reason
