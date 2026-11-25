@@ -214,6 +214,60 @@ def test_debugger_may_fix_nameerror_inside_test():
     assert not any(h["action"] == "change_strategy" for h in s.history)
 
 
+def test_debugger_adds_missing_import_for_generated_module_nameerror():
+    broken = (
+        "from m import add\n\n"
+        "def test_add():\n"
+        "    assert m.add(2, 3) == 5\n"
+    )
+    s, llm = run(scripted(tester=[file_block("test_solution.py", broken)]))
+    assert s.status == "success" and s.iteration == 1
+    assert "import m\n" in s.tests["test_solution.py"]
+    assert not any(call["agent"] == "debugger" for call in llm.calls)
+
+
+def test_debugger_repairs_assertions_on_internal_module_state():
+    source = (
+        "class Student:\n"
+        "    def __init__(self, student_id, name):\n"
+        "        self.student_id = student_id\n"
+        "        self.name = name\n"
+        "\n"
+        "students = {}\n"
+        "\n"
+        "def add_student(student_id, name):\n"
+        "    students[student_id] = Student(student_id, name)\n"
+        "\n"
+        "def search_student(student_id):\n"
+        "    student = students[student_id]\n"
+        "    return {'student_id': student.student_id, 'name': student.name}\n"
+    )
+    incorrect_test = (
+        "import student\n"
+        "from student import Student, add_student\n"
+        "\n"
+        "def test_add_student():\n"
+        "    add_student('1', 'Alice')\n"
+        "    assert student.students == {'1': Student('1', 'Alice')}\n"
+    )
+    corrected_test = (
+        "from student import add_student, search_student\n"
+        "\n"
+        "def test_add_student():\n"
+        "    add_student('1', 'Alice')\n"
+        "    assert search_student('1') == {'student_id': '1', 'name': 'Alice'}\n"
+    )
+    s, _ = run(scripted(
+        planner=[plan_json("student.py", "student records", ["add and search students"])],
+        coder=[file_block("student.py", source)],
+        tester=[file_block("test_solution.py", incorrect_test)],
+        debugger=[file_block("test_solution.py", corrected_test)],
+    ))
+    assert s.status == "success"
+    assert s.files["student.py"] == source
+    assert "search_student('1')" in s.tests["test_solution.py"]
+
+
 def test_debugger_may_fix_test_that_reads_wrong_file():
     wrong_test = (
         "from m import add\n"
