@@ -31,7 +31,7 @@ class SharedState:
     review: Optional[dict] = None
     history: list[dict] = field(default_factory=list)
     metrics: list[dict] = field(default_factory=list)
-    status: str = "running"       # running | success | partial | failed
+    status: str = "running"       # running | planned | success | partial | failed
     stop_reason: str = ""
     failure_signatures: list[str] = field(default_factory=list)
     debug_hint: str = ""          # supervisor can ask the debugger to change strategy

@@ -12,11 +12,21 @@ from llm import LLMClient
 from supervisor import Supervisor, new_run_dir
 
 
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("expected a positive integer")
+    return number
+
+
 def main():
     ap = argparse.ArgumentParser(description="Agentic AI software engineering assistant (Phase-I)")
     ap.add_argument("request", nargs="?", help="plain-English requirement")
     ap.add_argument("--model")
     ap.add_argument("--demo", action="store_true", help="scripted offline demo, no LLM needed")
+    ap.add_argument("--plan-only", action="store_true", help="stop after saving the requirements and plan")
+    ap.add_argument("--llm-timeout", type=positive_int, help="Ollama read timeout in seconds")
+    ap.add_argument("--max-output-tokens", type=positive_int, help="cap output tokens per Ollama call")
     ap.add_argument("--max-debug", type=int)
     ap.add_argument("--token-budget", type=int)
     a = ap.parse_args()
@@ -31,19 +41,27 @@ def main():
     if not a.request:
         ap.error("give a request or use --demo")
     cfg.model = a.model or cfg.model
+    if a.llm_timeout is not None:
+        cfg.llm_timeout_s = a.llm_timeout
+    if a.max_output_tokens is not None:
+        cfg.max_output_tokens = a.max_output_tokens
     cfg.max_debug_iterations = a.max_debug or cfg.max_debug_iterations
     cfg.token_budget = a.token_budget or cfg.token_budget
 
     llm = LLMClient(cfg, backend)
-    run_dir = new_run_dir(cfg, "demo" if a.demo else "run")
-    state = Supervisor(cfg, llm).run(a.request, run_dir)
+    tag = "demo" if a.demo else ("plan" if a.plan_only else "run")
+    run_dir = new_run_dir(cfg, tag)
+    state = Supervisor(cfg, llm).run(a.request, run_dir, plan_only=a.plan_only)
 
     print(f"\nstatus      : {state.status}  ({state.stop_reason})")
-    flow: list[str] = []
+    print(f"backend     : {cfg.backend} ({'scripted demo' if a.demo else cfg.model})")
+    flow = [h["agent"] for h in state.history if h["action"] == "stage_started"]
     for h in state.history:
-        if h["action"] not in ("start", "stop", "change_strategy") and (not flow or flow[-1] != h["agent"]):
-            flow.append(h["agent"])
+        if h["action"] == "stage_failed":
+            print(f"stopped at  : {h['agent']}")
     print("workflow    : " + " -> ".join(flow))
+    print(f"debug cycles: {sum(h['action'] == 'patched' for h in state.history)}")
+    print(f"total tokens: {llm.total_tokens}")
     if state.test_result:
         t = state.test_result
         print(f"tests       : {t.passed} passed, {t.failed} failed, {t.errors} errors")
@@ -61,7 +79,8 @@ def main():
     for k, (tok, n, sec) in per_agent.items():
         print(f"              {k:<12}{n:<7}{tok:<8}{sec:.2f}")
     print(f"artifacts   : {run_dir}/")
+    return 0 if state.status in ("success", "planned") else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

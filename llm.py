@@ -42,6 +42,8 @@ class OllamaBackend:
             "stream": False,
             "options": {"temperature": self.cfg.temperature, "seed": self.cfg.seed},
         }
+        if self.cfg.max_output_tokens:
+            payload["options"]["num_predict"] = self.cfg.max_output_tokens
         if json_mode:
             payload["format"] = "json"
         r = requests.post(f"{self.cfg.ollama_url}/api/generate", json=payload,
@@ -124,6 +126,8 @@ class LLMClient:
             resp = self.call(agent, system, p, json_mode=True)
             try:
                 data = extract_json(resp.text)
+                if not isinstance(data, dict):
+                    raise TypeError("expected a JSON object")
                 missing = [k for k in (required_keys or []) if k not in data]
                 if missing:
                     raise KeyError(f"missing keys {missing}")

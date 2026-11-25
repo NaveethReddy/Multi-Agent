@@ -79,11 +79,21 @@ class Supervisor:
             "reviewer": ReviewerAgent(llm),
         }
 
-    def run(self, request: str, run_dir: Optional[str] = None) -> SharedState:
+    def run(self, request: str, run_dir: Optional[str] = None, *,
+            plan_only: bool = False) -> SharedState:
         state = SharedState(request=request)
         t_start = time.time()
-        state.log("supervisor", "start", {"model": self.cfg.model, "backend": self.cfg.backend})
+        state.log("supervisor", "start", {
+            "model": self.cfg.model,
+            "backend": self.cfg.backend,
+            "plan_only": plan_only,
+            "temperature": self.cfg.temperature,
+            "seed": self.cfg.seed,
+            "llm_timeout_s": self.cfg.llm_timeout_s,
+            "max_output_tokens": self.cfg.max_output_tokens,
+        })
         repeats = 0
+        action = None
         max_steps = 60                       # absolute safety net against routing bugs
         try:
             for _ in range(max_steps):
@@ -93,7 +103,11 @@ class Supervisor:
                 action = next_action(state, self.cfg)
                 if action == STOP:
                     break
+                state.log(action, "stage_started")
                 self._step(state, action)
+                if plan_only and action == "planner":
+                    state.status, state.stop_reason = "planned", "requirements and plan generated"
+                    break
                 repeats = self._track_failures(state, action, repeats)
                 if repeats >= 3:             # still the same failure after changing strategy
                     state.status, state.stop_reason = "partial", \
@@ -103,8 +117,10 @@ class Supervisor:
                 state.status, state.stop_reason = "failed", "step limit reached"
         except BudgetExceeded as e:
             state.status, state.stop_reason = "partial", f"budget: {e}"
+            state.log(action or "supervisor", "stage_failed", state.stop_reason)
         except Exception as e:               # malformed output after repair, unsafe path, ...
             state.status, state.stop_reason = "failed", f"{type(e).__name__}: {e}"
+            state.log(action or "supervisor", "stage_failed", state.stop_reason)
 
         state.metrics = list(self.llm.calls)
         state.log("supervisor", "stop", {"status": state.status, "reason": state.stop_reason,

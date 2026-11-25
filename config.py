@@ -12,6 +12,7 @@ class Config:
     temperature: float = float(os.getenv("AGENTIC_TEMP", "0.2"))
     seed: int = int(os.getenv("AGENTIC_SEED", "42"))
     llm_timeout_s: int = 300
+    max_output_tokens: int = 0  # zero leaves the server's generation limit unchanged
 
     # Termination rules (architecture doc, section 5)
     max_debug_iterations: int = 5

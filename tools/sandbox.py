@@ -113,7 +113,7 @@ def run_script(code: str, timeout_s: int = 20) -> tuple[int, str]:
     """Run a snippet of Python in the sandbox; returns (returncode, combined output)."""
     with tempfile.TemporaryDirectory(prefix="agentic_script_") as tmp:
         f = Path(tmp) / "snippet.py"
-        f.write_text(code)
+        f.write_text(code, encoding="utf-8")
         kwargs = {"preexec_fn": _limits} if os.name == "posix" else {}
         try:
             p = subprocess.run([sys.executable, "-I", str(f)], cwd=tmp, env=_scrubbed_env(),

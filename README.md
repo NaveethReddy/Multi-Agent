@@ -60,7 +60,32 @@ AGENTIC_MODEL=deepseek-coder-v2:16b python main.py "..."     # pick the model
 Each run writes `runs/<timestamp>/state.json` (full replayable log: history, per-call tokens and
 seconds, review report) and `runs/<timestamp>/output/` (generated code and tests).
 
+For the Phase I review, demonstrate requirements and planning with the real local model:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --model qwen2.5-coder:7b --plan-only --max-output-tokens 640 --llm-timeout 420 "Create a Python student management system with add, delete, update and search functions"
+```
+
+`planned` means the run saved both an SRS and an implementation plan. Open the
+reported `state.json` to show those artifacts and the stage trace. In a failed
+run, `stage_failed` identifies the stage that stopped and records the error.
+The optional output cap can truncate a long answer. The main CLI defaults and
+benchmark sampling settings apply when no override is supplied.
+
+Use `python main.py --demo` to demonstrate code generation, failing tests,
+debugging, retesting and review offline. The demo uses scripted responses and
+reports its backend in the CLI and run log.
+
+See [Phase I review milestone](PHASE_I_REVIEW.md) for the review checklist.
+
 ## Evaluate (design doc, section 10)
+
+Check the benchmark harness with the official reference solutions before
+running model comparisons. The result measures the harness without Ollama.
+
+```bash
+python -m eval.humaneval_runner --data HumanEval.jsonl.gz --mode canonical
+```
 
 ```bash
 # 1. HumanEval: download data/HumanEval.jsonl.gz from github.com/openai/human-eval and gunzip it
