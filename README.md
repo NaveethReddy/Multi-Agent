@@ -100,6 +100,11 @@ The same model, temperature and budget are used in every mode. Samples within on
 `seed, seed+1, ...` so Pass@k with `n > 1` is meaningful. The third baseline (human-assisted) is timed
 manually on the custom tasks.
 
+Evaluation reports identify the backend, temperature and seed. A failed model
+or supervisor run counts as zero and retains its error in the report. A
+custom-task error does not stop scoring later tasks. Canonical and mock reports
+verify the harness and must be kept separate from live model comparisons.
+
 ## Tests
 
 ```bash

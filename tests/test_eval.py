@@ -1,11 +1,14 @@
 """Evaluation harness plumbing, checked with oracle mocks (NOT model results)."""
 import dataclasses
+import json
 import pathlib
+import sys
 
 import pytest
 
 from config import Config
 from eval import mock_llm
+from eval import run_custom
 from eval.humaneval_runner import check_solution, evaluate, load_problems
 from eval.run_custom import load_tasks, run_task
 
@@ -48,3 +51,50 @@ def test_custom_hidden_tests_reject_a_naive_solution():
     r = run_task(t, "single", CFG, mock_llm.oracle_backend(
         t["module"], mock_llm.BUGGY_STUDENTS, "def test_x():\n    assert True\n"))
     assert not r["success"] and r["correctness"] < 1.0
+
+
+def test_failed_reviewer_does_not_earn_benchmark_credit(tmp_path):
+    problem = load_problems(MINI)[0]
+
+    def broken_review(backend):
+        backend.responses["reviewer"] = ["invalid JSON"]
+        return backend
+
+    report = tmp_path / "humaneval.json"
+    summary = evaluate([problem], "multi", CFG,
+                       backend_factory=lambda p: broken_review(mock_llm.humaneval_oracle_backend(p)),
+                       out_path=str(report))
+    row = json.loads(report.read_text())["rows"][0]
+    assert summary["pass@1"] == 0.0
+    assert summary["error_samples"] == 1
+    assert summary["backend"] == "mock"
+    assert "reviewer: invalid JSON" in row["errors"][0]["reason"]
+    assert row["tokens"] > 0
+
+    task = next(t for t in load_tasks() if t["id"] == "student_mgmt")
+    result = run_task(task, "multi", CFG, broken_review(mock_llm.custom_oracle_backend(task["id"])))
+    assert not result["success"] and result["tests_total"] == 0
+    assert "reviewer: invalid JSON" in result["error"]
+
+
+def test_custom_report_keeps_going_after_a_model_error(tmp_path, monkeypatch):
+    tasks = load_tasks()[:2]
+    original_backend = mock_llm.custom_oracle_backend
+
+    def fail_generate(*args):
+        raise ConnectionError("model unavailable")
+
+    monkeypatch.setattr(run_custom, "load_tasks", lambda: tasks)
+    monkeypatch.setattr(mock_llm, "custom_oracle_backend", lambda task_id:
+                        mock_llm.MockBackend(fail_generate) if task_id == tasks[0]["id"]
+                        else original_backend(task_id))
+    report = tmp_path / "custom.json"
+    monkeypatch.setattr(sys, "argv", ["run_custom", "--mode", "single", "--backend", "mock",
+                                     "--out", str(report)])
+    run_custom.main()
+    data = json.loads(report.read_text())
+    assert data["summary"]["backend"] == "mock"
+    assert data["summary"]["error_tasks"] == 1
+    assert data["summary"]["task_success_rate"] == 0.5
+    assert data["rows"][0]["error"] == "ConnectionError: model unavailable"
+    assert data["rows"][1]["success"]

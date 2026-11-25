@@ -35,23 +35,33 @@ def load_tasks() -> list[dict]:
 
 
 def run_task(task: dict, mode: str, cfg, backend=None) -> dict:
-    llm = LLMClient(cfg, backend)
-    t0 = time.time()
-    request = task["request"]
-    if mode == "multi":
-        state = Supervisor(cfg, llm).run(request)
-        files, status, iters = state.files, state.status, state.iteration
-    else:
-        r = (run_single if mode == "single" else lambda p, l: run_single_retry(p, l, cfg))(
-            request + f"\n\nPut everything in a single module named {task['module']}.", llm)
-        files, status, iters = {task["module"]: r.code}, "n/a", 0
-    res = run_pytest(files, {"test_hidden.py": task["hidden_test"]}, cfg.sandbox_timeout_s)
-    total = res.passed + res.failed + res.errors
-    return {"task": task["id"], "mode": mode, "success": res.all_passed,
-            "correctness": round(res.passed / total, 3) if total else 0.0,
-            "tests_passed": res.passed, "tests_total": total, "status": status,
-            "debug_iterations": iters, "tokens": llm.total_tokens,
-            "seconds": round(time.time() - t0, 2)}
+    t0 = time.monotonic()
+    llm = None
+    status, iters, error, res = "n/a", 0, None, None
+    try:
+        llm = LLMClient(cfg, backend)
+        request = task["request"]
+        if mode == "multi":
+            state = Supervisor(cfg, llm).run(request)
+            files, status = state.files, state.status
+            iters = sum(h["action"] == "patched" for h in state.history)
+            if status == "failed":
+                error = state.stop_reason
+        else:
+            prompt = request + f"\n\nPut everything in a single module named {task['module']}."
+            result = run_single(prompt, llm) if mode == "single" else run_single_retry(prompt, llm, cfg)
+            files = {task["module"]: result.code}
+        if error is None:
+            res = run_pytest(files, {"test_hidden.py": task["hidden_test"]}, cfg.sandbox_timeout_s)
+    except Exception as exc:
+        status, error = "failed", f"{type(exc).__name__}: {exc}"
+    passed = res.passed if res is not None else 0
+    total = res.passed + res.failed + res.errors if res is not None else 0
+    return {"task": task["id"], "mode": mode, "success": res is not None and res.all_passed,
+            "correctness": round(passed / total, 3) if total else 0.0,
+            "tests_passed": passed, "tests_total": total, "status": status, "error": error,
+            "debug_iterations": iters, "tokens": llm.total_tokens if llm is not None else 0,
+            "seconds": round(time.monotonic() - t0, 2)}
 
 
 def main():
@@ -73,10 +83,14 @@ def main():
             backend = custom_oracle_backend(t["id"])
         row = run_task(t, a.mode, cfg, backend)
         rows.append(row)
+        if row["error"] is not None:
+            print(f"  [{row['task']}] error: {row['error']}", file=sys.stderr)
         print(f"{row['task']:>14}  success={row['success']}  {row['tests_passed']}/{row['tests_total']}"
               f"  tokens={row['tokens']}  {row['seconds']}s")
     n = len(rows)
     summary = {"mode": a.mode, "model": cfg.model, "tasks": n,
+               "backend": cfg.backend, "temperature": cfg.temperature, "seed": cfg.seed,
+               "error_tasks": sum(r["error"] is not None for r in rows),
                "task_success_rate": round(sum(r["success"] for r in rows) / n, 3),
                "mean_correctness": round(sum(r["correctness"] for r in rows) / n, 3),
                "mean_tokens": round(sum(r["tokens"] for r in rows) / n),
@@ -84,7 +98,8 @@ def main():
     print(json.dumps(summary, indent=2))
     out = a.out or f"{cfg.runs_dir}/custom_{a.mode}.json"
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    json.dump({"summary": summary, "rows": rows}, open(out, "w"), indent=2)
+    with open(out, "w", encoding="utf-8") as report:
+        json.dump({"summary": summary, "rows": rows}, report, indent=2)
 
 
 if __name__ == "__main__":

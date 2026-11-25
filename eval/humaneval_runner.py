@@ -64,6 +64,8 @@ def solve(problem: dict, mode: str, cfg: Config, llm: LLMClient) -> tuple[str, i
         req = (prompt + f"\n\nThe solution file must define `{problem['entry_point']}` "
                "with exactly this signature.")
         state = Supervisor(cfg, llm).run(req)
+        if state.status == "failed":
+            raise RuntimeError(state.stop_reason)
         code = "\n\n".join(c for p, c in state.files.items())
         return code, llm.total_tokens, time.time() - t0
     raise ValueError(mode)
@@ -76,6 +78,7 @@ def evaluate(problems, mode, cfg, n=1, ks=(1,), backend_factory=None, out_path=N
     for prob in problems:
         correct = 0
         toks = secs = 0
+        errors = []
         for i in range(n):
             c = replace(cfg, seed=cfg.seed + i)
             llm = None
@@ -93,15 +96,21 @@ def evaluate(problems, mode, cfg, n=1, ks=(1,), backend_factory=None, out_path=N
             except Exception as e:  # network/model error counts as a failure, logged
                 tok = llm.total_tokens if llm is not None else 0
                 sec, ok = time.monotonic() - started, False
-                print(f"  [{prob['task_id']}] error: {e}", file=sys.stderr)
+                reason = f"{type(e).__name__}: {e}"
+                errors.append({"sample": i + 1, "seed": c.seed, "reason": reason})
+                print(f"  [{prob['task_id']}] error: {reason}", file=sys.stderr)
             correct += ok
             toks += tok
             secs += sec
         rows.append({"task_id": prob["task_id"], "n": n, "correct": correct,
-                     "tokens": toks, "seconds": round(secs, 2)})
+                     "tokens": toks, "seconds": round(secs, 2), "errors": errors})
         print(f"{prob['task_id']:>16}  {correct}/{n}  tokens={toks}  {secs:.1f}s")
     summary = {"mode": mode, "model": None if mode == "canonical" else cfg.model,
                "problems": len(rows), "n": n,
+               "backend": "canonical" if mode == "canonical" else ("mock" if backend_factory else cfg.backend),
+               "temperature": None if mode == "canonical" else cfg.temperature,
+               "seed": None if mode == "canonical" else cfg.seed,
+               "error_samples": sum(len(r["errors"]) for r in rows),
                **{f"pass@{k}": round(sum(pass_at_k(r["n"], r["correct"], k) for r in rows)
                                      / max(len(rows), 1), 4) for k in ks if k <= n},
                "avg_tokens_per_problem": round(sum(r["tokens"] for r in rows) / max(len(rows), 1) / n),
