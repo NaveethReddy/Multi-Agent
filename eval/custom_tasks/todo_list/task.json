@@ -1,0 +1,5 @@
+{
+  "id": "todo_list",
+  "module": "todo.py",
+  "request": "Write todo.py with a class TodoList. Methods: add(text: str) -> int returns a new increasing task id starting at 1; complete(task_id) marks it done; remove(task_id) deletes it; pending() -> list[str] returns the texts of unfinished tasks in insertion order. complete and remove raise KeyError on an unknown id. add raises ValueError for empty or whitespace-only text."
+}

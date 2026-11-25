@@ -1,0 +1,5 @@
+{
+  "id": "inventory",
+  "module": "inventory.py",
+  "request": "Write inventory.py with a class Inventory. Methods: add_item(name: str, qty: int, price: float), remove_stock(name, qty) (raises ValueError if stock is insufficient, KeyError if the item is unknown), total_value() -> float, low_stock(threshold: int) -> list[str] (sorted names with qty < threshold), and save(path) / load(path) classmethod persisting to JSON. add_item on an existing name adds to the quantity and keeps the original price. qty must be >= 0 else ValueError."
+}

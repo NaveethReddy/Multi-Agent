@@ -1,0 +1,5 @@
+{
+  "id": "text_utils",
+  "module": "textutils.py",
+  "request": "Write textutils.py with three functions: word_frequency(text: str) -> dict that lower-cases text, ignores punctuation and returns word counts; most_common(text: str, n: int) -> list[tuple[str, int]] returning the n most frequent words, ties broken alphabetically; and is_anagram(a: str, b: str) -> bool ignoring case and spaces. n < 0 raises ValueError."
+}

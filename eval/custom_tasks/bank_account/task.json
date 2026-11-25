@@ -1,0 +1,5 @@
+{
+  "id": "bank_account",
+  "module": "bank.py",
+  "request": "Write bank.py with a class Account(owner: str, balance: float = 0.0). Methods: deposit(amount) and withdraw(amount) return the new balance; both raise ValueError if amount <= 0; withdraw also raises ValueError if funds are insufficient (balance must never go negative). Provide transfer(other, amount) that moves money atomically (if it fails neither account changes) and a read-only property balance."
+}

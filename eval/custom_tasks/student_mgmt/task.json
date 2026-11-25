@@ -1,0 +1,5 @@
+{
+  "id": "student_mgmt",
+  "module": "students.py",
+  "request": "Create a Python student management system with add, delete, update and search functions. Provide a class StudentManager in students.py with methods add(student_id: int, name: str, grade: float), delete(student_id), update(student_id, name=None, grade=None) and search(query: str) -> list. add raises ValueError on a duplicate id; delete and update raise KeyError for an unknown id; search matches names case-insensitively by substring and returns records sorted by student_id. Each record is a dict with keys id, name, grade."
+}
